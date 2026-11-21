@@ -109,3 +109,201 @@ long_mode_start:
 .hang:
     hlt
     jmp .hang
+
+; ─── Keyboard IRQ stub (IRQ1 = INT 33) ──────────────────────────────────────
+global keyboard_isr_stub
+extern keyboard_handler_inner
+
+keyboard_isr_stub:
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+
+    cld
+    call keyboard_handler_inner
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+
+    iretq
+
+; ─── Default IRQ stub (sends EOI to PIC1 and returns) ───────────────────────
+global default_irq_stub
+default_irq_stub:
+    push rax
+    mov al, 0x20
+    out 0x20, al
+    pop rax
+    iretq
+
+; ─── Default ISR stub (just iretq) ──────────────────────────────────────────
+global default_isr_stub
+default_isr_stub:
+    iretq
+
+; ─── CPU Exception ISR stubs ────────────────────────────────────────────────
+; Each stub pushes the vector number into RDI (first arg for System V ABI)
+; and calls the Rust exception_handler_inner(vector: u64)
+
+extern exception_handler_inner
+
+%macro isr_no_err_stub 1
+global isr_stub_%1
+isr_stub_%1:
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov rdi, %1              ; vector number as first argument
+    call exception_handler_inner
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    iretq
+%endmacro
+
+; Exceptions without error code
+isr_no_err_stub 0
+isr_no_err_stub 1
+isr_no_err_stub 2
+isr_no_err_stub 3
+isr_no_err_stub 4
+isr_no_err_stub 5
+isr_no_err_stub 6
+isr_no_err_stub 7
+
+; Exception 8 (Double Fault) has an error code, but we just discard it
+global isr_stub_8
+isr_stub_8:
+    ; CPU pushes error code on stack before the interrupt frame
+    ; We pop it off so our generic handler works
+    add rsp, 8               ; discard error code
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rdi, 8
+    call exception_handler_inner
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    iretq
+
+; Exceptions 10-14 push error codes
+%macro isr_err_stub 1
+global isr_stub_%1
+isr_stub_%1:
+    add rsp, 8               ; discard error code
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rdi, %1
+    call exception_handler_inner
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    iretq
+%endmacro
+
+isr_err_stub 10
+isr_err_stub 11
+isr_err_stub 12
+isr_err_stub 13
+isr_err_stub 14
